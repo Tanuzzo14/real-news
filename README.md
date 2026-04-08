@@ -9,7 +9,7 @@ A Progressive Web App (PWA) that aggregates Italian news from trusted sources an
 | **Frontend** | Angular 19 (PWA) → Cloudflare Pages |
 | **Backend / API** | Cloudflare Workers (TypeScript) |
 | **Database** | Cloudflare D1 (SQLite) |
-| **AI** | Google Gemini API (gemini-1.5-flash) |
+| **AI** | Google Gemini API (gemini-2.5-flash) |
 | **Scheduling** | Cloudflare Workers Cron Triggers |
 
 ### News Sources
