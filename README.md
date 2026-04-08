@@ -6,7 +6,7 @@ A Progressive Web App (PWA) that aggregates Italian news from trusted sources an
 
 | Component | Technology |
 |-----------|-----------|
-| **Frontend** | Angular 17+ (PWA) → Cloudflare Pages |
+| **Frontend** | Angular 19 (PWA) → Cloudflare Pages |
 | **Backend / API** | Cloudflare Workers (TypeScript) |
 | **Database** | Cloudflare D1 (SQLite) |
 | **AI** | Google Gemini API (gemini-1.5-flash) |
@@ -44,46 +44,139 @@ real-news/
         └── deploy.yml        # CI/CD pipeline
 ```
 
-## 🚀 Getting Started
+---
 
-### Prerequisites
-- Node.js 20+
-- npm 10+
-- [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/) (`npm install -g wrangler`)
-- A Cloudflare account
-- A Google AI (Gemini) API key
+## 🚀 Da zero a live su Cloudflare (tutto online, senza installare nulla)
 
-### Frontend Setup
+Questa guida spiega come mettere il progetto online partendo da zero, usando solo il browser. Non è necessario installare Node.js, Wrangler o qualsiasi altro strumento in locale.
 
-```bash
-cd frontend
-npm install
-npx ng serve
+### Strumenti necessari (tutti online)
+- Un account **GitHub** → [github.com](https://github.com)
+- Un account **Cloudflare** (gratuito) → [cloudflare.com](https://cloudflare.com)
+- Una **Google Gemini API key** → [aistudio.google.com/apikey](https://aistudio.google.com/apikey)
+
+---
+
+### Passo 1 – Fork del repository su GitHub
+
+1. Vai su [github.com/Tanuzzo14/real-news](https://github.com/Tanuzzo14/real-news).
+2. Clicca su **Fork** (in alto a destra) per creare una copia nel tuo account GitHub.
+
+---
+
+### Passo 2 – Crea il database D1 su Cloudflare
+
+1. Vai su [dash.cloudflare.com](https://dash.cloudflare.com) e accedi.
+2. Dal menu laterale clicca su **Workers & Pages** → **D1 SQL Database**.
+3. Clicca **Create database**, inserisci il nome `real-news-db` e clicca **Create**.
+4. Una volta creato, apri il database e annota il valore di **Database ID** (ti servirà al passo 4).
+5. Clicca sulla scheda **Console** ed esegui la migration iniziale incollando questo SQL:
+
+```sql
+CREATE TABLE IF NOT EXISTS news_posts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  source TEXT NOT NULL,
+  original_url TEXT NOT NULL UNIQUE,
+  title TEXT NOT NULL,
+  content_summary TEXT,
+  published_at TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  day TEXT
+);
 ```
 
-The app runs at `http://localhost:4200`.
+6. Clicca **Execute** per creare la tabella.
 
-### Worker Setup
+---
 
-```bash
-cd worker
-npm install
+### Passo 3 – Crea il Cloudflare API Token
 
-# Create D1 database
-wrangler d1 create real-news-db
-# Update wrangler.toml with the returned database_id
+1. Vai su [dash.cloudflare.com/profile/api-tokens](https://dash.cloudflare.com/profile/api-tokens).
+2. Clicca **Create Token**.
+3. Seleziona il template **Edit Cloudflare Workers** oppure crea un token personalizzato con i permessi:
+   - `Account → Cloudflare Pages → Edit`
+   - `Account → Workers Scripts → Edit`
+   - `Account → Workers KV Storage → Edit`
+   - `Account → D1 → Edit`
+4. Clicca **Continue to summary** → **Create Token**.
+5. **Copia il token** e conservalo (viene mostrato una sola volta).
+6. Dalla home del dashboard, annota il tuo **Account ID** (visibile in alto a destra nella sidebar).
 
-# Run local migration
-npm run db:migrate:local
+---
 
-# Set your Gemini API key
-wrangler secret put GEMINI_API_KEY
+### Passo 4 – Aggiorna `wrangler.toml` con il Database ID
 
-# Start local dev server
-npm run dev
+1. Sul tuo fork GitHub, apri il file `worker/wrangler.toml`.
+2. Clicca l'icona matita ✏️ per modificarlo direttamente nel browser.
+3. Trova la sezione `[[d1_databases]]` e sostituisci il valore di `database_id` con quello ottenuto al passo 2:
+
+```toml
+[[d1_databases]]
+binding = "DB"
+database_name = "real-news-db"
+database_id = "INCOLLA_QUI_IL_TUO_DATABASE_ID"
 ```
 
-The Worker runs at `http://localhost:8787`.
+4. Clicca **Commit changes** per salvare.
+
+---
+
+### Passo 5 – Aggiungi i secret su GitHub
+
+1. Sul tuo fork GitHub, vai su **Settings** → **Secrets and variables** → **Actions**.
+2. Clicca **New repository secret** e aggiungi i seguenti secret uno alla volta:
+
+| Nome secret | Valore |
+|---|---|
+| `CLOUDFLARE_API_TOKEN` | Il token creato al passo 3 |
+| `CLOUDFLARE_ACCOUNT_ID` | Il tuo Account ID di Cloudflare |
+| `GEMINI_API_KEY` | La tua Google Gemini API key |
+
+---
+
+### Passo 6 – Avvia il deploy tramite GitHub Actions
+
+1. Sul tuo fork GitHub, vai su **Actions**.
+2. Se GitHub Actions non è ancora abilitato, clicca **I understand my workflows, go ahead and enable them**.
+3. Vai su **Actions** → seleziona il workflow **Deploy**.
+4. Clicca **Run workflow** → **Run workflow** per avviare il primo deploy manuale.
+
+In alternativa, ogni push sul branch `main` attiverà automaticamente il deploy.
+
+Il workflow si occuperà di:
+1. Buildare il frontend Angular
+2. Deployare il frontend su **Cloudflare Pages**
+3. Deployare il Worker su **Cloudflare Workers**
+4. Eseguire la migration del database D1 in remoto
+
+---
+
+### Passo 7 – Configura CORS sul Worker
+
+Una volta completato il primo deploy, Cloudflare Pages assegnerà un dominio al frontend (es. `real-news.pages.dev`).
+
+1. Vai su **Workers & Pages** nel dashboard Cloudflare.
+2. Apri il Worker `real-news-worker`.
+3. Vai su **Settings** → **Variables and Secrets**.
+4. Aggiungi una variabile di ambiente:
+   - **Key**: `ALLOWED_ORIGIN`
+   - **Value**: `https://real-news.pages.dev` (o il tuo dominio personalizzato)
+5. Clicca **Save**.
+
+In alternativa, puoi aggiornare `ALLOWED_ORIGIN` direttamente in `worker/wrangler.toml` e fare commit:
+
+```toml
+[vars]
+ALLOWED_ORIGIN = "https://real-news.pages.dev"
+```
+
+---
+
+### ✅ Risultato finale
+
+Dopo questi passi, l'app sarà accessibile all'indirizzo assegnato da Cloudflare Pages (es. `https://real-news.pages.dev`). Il Worker recupererà automaticamente le notizie ogni ora tramite il Cron Trigger.
+
+---
 
 ## 🔌 API Endpoints
 
@@ -126,34 +219,6 @@ The Worker runs at `http://localhost:8787`.
 - **CORS**: Worker only accepts requests from the configured Cloudflare Pages domain.
 - **API Keys**: `GEMINI_API_KEY` stored as a Cloudflare Secret (never exposed to frontend).
 - **Environment Variables**: Set `ALLOWED_ORIGIN` in `wrangler.toml` for production.
-
-## 🚢 Deployment
-
-### GitHub Secrets Required
-- `CLOUDFLARE_API_TOKEN` – Cloudflare API token with Workers & Pages permissions
-- `CLOUDFLARE_ACCOUNT_ID` – Your Cloudflare account ID
-
-### CI/CD
-Every push to `main` automatically:
-1. Builds the Angular frontend
-2. Deploys to Cloudflare Pages
-3. Deploys the Worker to Cloudflare Workers
-
-### Manual Deploy
-
-```bash
-# Frontend
-cd frontend
-npx ng build --configuration production
-npx wrangler pages deploy dist/frontend/browser --project-name=real-news
-
-# Worker
-cd worker
-npm run deploy
-
-# Database migration (remote)
-npm run db:migrate:remote
-```
 
 ## ⚙️ Cron Trigger
 
