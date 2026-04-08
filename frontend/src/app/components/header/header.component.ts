@@ -1,6 +1,7 @@
 import { Component, inject, signal } from '@angular/core';
 import { ThemeService } from '../../services/theme.service';
 import { InstallService } from '../../services/install.service';
+import { NewsService } from '../../services/news.service';
 
 @Component({
   selector: 'app-header',
@@ -11,6 +12,11 @@ import { InstallService } from '../../services/install.service';
 export class HeaderComponent {
   readonly themeService = inject(ThemeService);
   readonly installService = inject(InstallService);
+  readonly newsService = inject(NewsService);
+
+  refreshNews(): void {
+    this.newsService.loadInitial();
+  }
 
   readonly showIOSSheet = signal(false);
 
