@@ -1,0 +1,49 @@
+name: Update Lockfiles
+
+on:
+  schedule:
+    - cron: '0 4 * * 1'  # Every Monday at 04:00 UTC
+  workflow_dispatch:      # Allow manual trigger
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-lockfiles:
+    name: Regenerate package-lock.json files
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Regenerate frontend lockfile
+        working-directory: frontend
+        run: |
+          rm -rf node_modules package-lock.json
+          npm install
+
+      - name: Regenerate worker lockfile
+        working-directory: worker
+        run: |
+          rm -rf node_modules package-lock.json
+          npm install
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: 'chore: regenerate package-lock.json files'
+          branch: chore/update-lockfiles
+          delete-branch: true
+          title: 'chore: regenerate package-lock.json files'
+          body: |
+            Automated weekly regeneration of `package-lock.json` files to keep them in sync with `package.json`.
+
+            This prevents `npm ci` failures caused by missing or mismatched entries in the lockfile.
+          labels: dependencies
