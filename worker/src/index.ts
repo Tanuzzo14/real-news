@@ -9,6 +9,7 @@ export interface Env {
   DB: D1Database;
   GEMINI_API_KEY: string;
   ALLOWED_ORIGIN?: string;
+  ADMIN_SECRET?: string;
 }
 
 interface NewsPost {
@@ -97,8 +98,8 @@ function corsHeaders(env: Env): Record<string, string> {
   const origin = env.ALLOWED_ORIGIN || '*';
   return {
     'Access-Control-Allow-Origin': origin,
-    'Access-Control-Allow-Methods': 'GET, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
   };
 }
 
@@ -219,15 +220,18 @@ async function processFeed(source: FeedSource, env: Env): Promise<number> {
   return newPosts;
 }
 
-async function fetchAllFeeds(env: Env): Promise<void> {
+async function fetchAllFeeds(env: Env): Promise<Record<string, number>> {
   console.log('Starting RSS feed fetch...');
 
+  const results: Record<string, number> = {};
   for (const source of FEED_SOURCES) {
     const count = await processFeed(source, env);
+    results[source.name] = count;
     console.log(`${source.name}: ${count} new posts`);
   }
 
   console.log('Feed fetch complete.');
+  return results;
 }
 
 // ---------------------------------------------------------------------------
@@ -323,6 +327,24 @@ async function handleApiSources(env: Env): Promise<Response> {
   );
 }
 
+async function handleAdminRefresh(request: Request, env: Env): Promise<Response> {
+  // Require a Bearer token matching ADMIN_SECRET
+  const authHeader = request.headers.get('Authorization') || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+
+  if (!env.ADMIN_SECRET || token !== env.ADMIN_SECRET) {
+    return jsonResponse({ error: 'Unauthorized' }, env, 401);
+  }
+
+  const newPosts = await fetchAllFeeds(env);
+  const total = Object.values(newPosts).reduce((sum, n) => sum + n, 0);
+
+  return jsonResponse(
+    { ok: true, newPosts, total },
+    env,
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Router
 // ---------------------------------------------------------------------------
@@ -338,6 +360,14 @@ async function handleRequest(
 
   const url = new URL(request.url);
   const path = url.pathname;
+
+  // Admin endpoint — POST only, authenticated
+  if (path === '/api/admin/refresh') {
+    if (request.method !== 'POST') {
+      return jsonResponse({ error: 'Method not allowed' }, env, 405);
+    }
+    return handleAdminRefresh(request, env);
+  }
 
   if (request.method !== 'GET') {
     return jsonResponse({ error: 'Method not allowed' }, env, 405);
