@@ -21,6 +21,9 @@ export class NewsService {
   /** Whether more pages are available */
   readonly hasMore = signal(true);
 
+  /** Error message from the last failed load, null when no error */
+  readonly error = signal<string | null>(null);
+
   /** Current page */
   private currentPage = 1;
 
@@ -96,6 +99,7 @@ export class NewsService {
     this.currentPage = 1;
     this.posts.set([]);
     this.hasMore.set(true);
+    this.error.set(null);
     this.loadPage();
   }
 
@@ -115,6 +119,7 @@ export class NewsService {
   /** Internal: load a specific page and append results */
   private loadPage(): void {
     this.loading.set(true);
+    this.error.set(null);
 
     const params: { page: number; limit: number; source?: string } = {
       page: this.currentPage,
@@ -128,16 +133,24 @@ export class NewsService {
 
     this.fetchNews(params).subscribe({
       next: (response) => {
+        const data = response.data ?? [];
         if (this.currentPage === 1) {
-          this.posts.set(response.data);
+          this.posts.set(data);
         } else {
-          this.posts.update((prev) => [...prev, ...response.data]);
+          this.posts.update((prev) => [...prev, ...data]);
         }
         this.hasMore.set(this.currentPage < response.pagination.totalPages);
         this.loading.set(false);
       },
       error: (err) => {
         console.error('Error fetching news:', err);
+        // Roll back the page increment so that a subsequent loadMore() retry
+        // requests the same page rather than skipping ahead.
+        this.currentPage = Math.max(1, this.currentPage - 1);
+        // Stop the infinite-scroll loop: without this the IntersectionObserver
+        // would keep firing loadMore() after each failed attempt.
+        this.hasMore.set(false);
+        this.error.set('Impossibile caricare le notizie. Prova ad aggiornare.');
         this.loading.set(false);
       },
     });
