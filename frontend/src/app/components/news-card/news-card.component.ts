@@ -53,7 +53,7 @@ export class NewsCardComponent {
     // Split on common bullet patterns: lines starting with •, -, *, or numbered
     const lines = this.post.content_summary
       .split(/\n/)
-      .map(line => line.replace(/^[\s]*[•\-\*]\s*/, '').trim())
+      .map(line => line.replace(/^\s*[•\-*]\s*/, '').trim())
       .filter(line => line.length > 0);
 
     return lines;

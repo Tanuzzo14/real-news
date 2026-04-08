@@ -7,6 +7,7 @@ import {
   OnDestroy,
   inject,
   signal,
+  effect,
   NgZone,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
@@ -47,16 +48,23 @@ export class NewsFeedComponent implements OnInit, AfterViewInit, OnDestroy {
     return Math.min(this.pullDistance() / 80, 1);
   }
 
+  constructor() {
+    // Reactively hide skeleton/refreshing when loading completes
+    effect(() => {
+      const loading = this.newsService.loading();
+      const hasPosts = this.newsService.posts().length > 0;
+
+      if (!loading || hasPosts) {
+        this.initialLoading.set(false);
+      }
+      if (!loading) {
+        this.refreshing.set(false);
+      }
+    });
+  }
+
   ngOnInit(): void {
     this.newsService.loadInitial();
-
-    // Track when first load completes to hide skeleton and show real content
-    const checkLoading = setInterval(() => {
-      if (!this.newsService.loading() || this.newsService.posts().length > 0) {
-        this.initialLoading.set(false);
-        clearInterval(checkLoading);
-      }
-    }, 100);
   }
 
   ngAfterViewInit(): void {
@@ -71,14 +79,6 @@ export class NewsFeedComponent implements OnInit, AfterViewInit, OnDestroy {
   filterBySource(source: string | null): void {
     this.newsService.filterBySource(source);
     this.initialLoading.set(true);
-
-    const checkLoading = setInterval(() => {
-      if (!this.newsService.loading() || this.newsService.posts().length > 0) {
-        this.initialLoading.set(false);
-        clearInterval(checkLoading);
-      }
-    }, 100);
-
     setTimeout(() => this.setupInfiniteScroll(), 100);
   }
 
@@ -125,16 +125,7 @@ export class NewsFeedComponent implements OnInit, AfterViewInit, OnDestroy {
             this.refreshing.set(true);
             this.pullDistance.set(0);
             this.isPulling.set(false);
-
             this.newsService.loadInitial();
-
-            // Reset refreshing after data loads
-            const checkDone = setInterval(() => {
-              if (!this.newsService.loading()) {
-                this.refreshing.set(false);
-                clearInterval(checkDone);
-              }
-            }, 100);
           });
         } else {
           this.ngZone.run(() => {
