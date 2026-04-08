@@ -3,11 +3,10 @@ import { CommonModule } from '@angular/common';
 import { NewsPost } from '../../models/news.model';
 
 @Component({
-  selector: 'app-news-card',
-  standalone: true,
-  imports: [CommonModule],
-  templateUrl: './news-card.component.html',
-  styleUrl: './news-card.component.scss',
+    selector: 'app-news-card',
+    imports: [CommonModule],
+    templateUrl: './news-card.component.html',
+    styleUrl: './news-card.component.scss'
 })
 export class NewsCardComponent {
   @Input({ required: true }) post!: NewsPost;

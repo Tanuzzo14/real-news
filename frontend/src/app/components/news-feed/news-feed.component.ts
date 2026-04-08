@@ -12,11 +12,10 @@ import { NewsService } from '../../services/news.service';
 import { NewsCardComponent } from '../news-card/news-card.component';
 
 @Component({
-  selector: 'app-news-feed',
-  standalone: true,
-  imports: [CommonModule, NewsCardComponent],
-  templateUrl: './news-feed.component.html',
-  styleUrl: './news-feed.component.scss',
+    selector: 'app-news-feed',
+    imports: [CommonModule, NewsCardComponent],
+    templateUrl: './news-feed.component.html',
+    styleUrl: './news-feed.component.scss'
 })
 export class NewsFeedComponent implements OnInit, AfterViewInit, OnDestroy {
   readonly newsService = inject(NewsService);
