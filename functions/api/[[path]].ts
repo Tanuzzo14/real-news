@@ -18,9 +18,22 @@ const FORWARDED_HEADERS = [
 export const onRequest: PagesFunction<Env> = async (context) => {
   const { request, env } = context;
 
-  if (!env.WORKER_URL) {
+  const workerUrl = env.WORKER_URL?.trim();
+
+  if (!workerUrl) {
     return new Response(
       JSON.stringify({ error: 'WORKER_URL environment variable is not configured' }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } },
+    );
+  }
+
+  let workerBase: URL;
+  try {
+    workerBase = new URL(workerUrl);
+  } catch (err) {
+    console.error('Pages proxy: WORKER_URL is not a valid URL:', workerUrl, err);
+    return new Response(
+      JSON.stringify({ error: 'WORKER_URL is invalid or misconfigured' }),
       { status: 500, headers: { 'Content-Type': 'application/json' } },
     );
   }
@@ -35,7 +48,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   const url = new URL(request.url);
   let targetUrl: URL;
   try {
-    targetUrl = new URL(url.pathname + url.search, env.WORKER_URL);
+    targetUrl = new URL(url.pathname + url.search, workerBase);
   } catch (err) {
     console.error('Pages proxy: failed to construct target URL from WORKER_URL:', err);
     return new Response(
