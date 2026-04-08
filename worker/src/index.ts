@@ -38,7 +38,7 @@ const FEED_SOURCES: FeedSource[] = [
 
 const SYSTEM_PROMPT = `Sei un assistente editoriale. Riceverai un testo proveniente da una di queste tre testate: Il Post (spiegazioni chiare), Valigia Blu (approfondimenti basati su dati), Linkiesta (analisi politica/culturale).
 
-Tuo obiettivo: Crea un post per una PWA mobile.
+Il tuo obiettivo: Crea un post per una PWA mobile.
 
 Analizza la fonte:
 - Se la fonte è 'Il Post', sii estremamente didascalico.
@@ -123,7 +123,8 @@ function jsonResponse(
 
 /** Extract the best available text from an RSS feed item */
 function extractArticleText(item: Record<string, unknown>): string {
-  // 1. Valigia Blu puts full content in content:encoded
+  // 1. Prefer 'content:encoded' (RSS 2.0 extension field for full article HTML).
+  //    Valigia Blu typically provides the entire article in this field.
   if (item['content:encoded']) return String(item['content:encoded']);
 
   // 2. Il Post and Linkiesta often use contentSnippet or description
@@ -274,7 +275,8 @@ async function handleApiNews(
     params.push(source);
   }
 
-  // Count total
+  // Count total — use [\s\S]*? to match across newlines in the
+  // multi-line CASE/period_label SELECT clause.
   const countQuery = query.replace(
     /SELECT[\s\S]*?FROM/,
     'SELECT COUNT(*) as total FROM',
