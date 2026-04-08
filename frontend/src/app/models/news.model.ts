@@ -7,6 +7,7 @@ export interface NewsPost {
   published_at: string;
   created_at: string;
   day?: string;
+  period_label?: string;
 }
 
 export interface NewsPagination {
