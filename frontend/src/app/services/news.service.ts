@@ -33,14 +33,31 @@ export class NewsService {
     const today = new Date().toISOString().split('T')[0];
     const yesterday = new Date(Date.now() - MS_PER_DAY).toISOString().split('T')[0];
 
-    const groups = new Map<string, NewsPost[]>();
+    const groups = new Map<string, { label: string; posts: NewsPost[] }>();
 
     for (const post of allPosts) {
       const day = post.published_at?.split('T')[0] || post.day || 'unknown';
+
       if (!groups.has(day)) {
-        groups.set(day, []);
+        // Use server-provided period_label when available
+        let label: string;
+        if (post.period_label) {
+          label = post.period_label;
+        } else if (day === today) {
+          label = 'Oggi';
+        } else if (day === yesterday) {
+          label = 'Ieri';
+        } else {
+          label = new Date(day + 'T00:00:00').toLocaleDateString('it-IT', {
+            weekday: 'long',
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric',
+          });
+        }
+        groups.set(day, { label, posts: [] });
       }
-      groups.get(day)!.push(post);
+      groups.get(day)!.posts.push(post);
     }
 
     const result: GroupedNews[] = [];
@@ -48,21 +65,8 @@ export class NewsService {
     const sortedKeys = [...groups.keys()].sort((a, b) => b.localeCompare(a));
 
     for (const key of sortedKeys) {
-      let label: string;
-      if (key === today) {
-        label = 'Oggi';
-      } else if (key === yesterday) {
-        label = 'Ieri';
-      } else {
-        label = new Date(key + 'T00:00:00').toLocaleDateString('it-IT', {
-          weekday: 'long',
-          day: 'numeric',
-          month: 'long',
-          year: 'numeric',
-        });
-      }
-
-      result.push({ label, date: key, posts: groups.get(key)! });
+      const group = groups.get(key)!;
+      result.push({ label: group.label, date: key, posts: group.posts });
     }
 
     return result;

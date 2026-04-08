@@ -36,17 +36,27 @@ const FEED_SOURCES: FeedSource[] = [
   { name: 'Linkiesta', url: 'https://www.linkiesta.it/feed/' },
 ];
 
-const SYSTEM_PROMPT = `Agisci come un Social Media Editor esperto. Il tuo compito è trasformare articoli di giornale in post social brevi, chiari e coinvolgenti.
+const SYSTEM_PROMPT = `Sei un assistente editoriale. Riceverai un testo proveniente da una di queste tre testate: Il Post (spiegazioni chiare), Valigia Blu (approfondimenti basati su dati), Linkiesta (analisi politica/culturale).
+
+Tuo obiettivo: Crea un post per una PWA mobile.
+
+Analizza la fonte:
+- Se la fonte è 'Il Post', sii estremamente didascalico.
+- Se è 'Valigia Blu', evidenzia il contesto sociale.
+- Se è 'Linkiesta', focalizzati sull'opinione e l'analisi.
+
+Formato:
+- Titolo: 💡 [Titolo breve]
+- Corpo: Max 3 paragrafi da 2 righe l'uno.
+- Focus: 'Cosa devi sapere' (bullet points).
 
 Regole di Stile:
 - Tono: Neutro, asciutto ma moderno. Evita il sensazionalismo.
-- Struttura:
-  - Un titolo breve in Bold (senza usare #).
-  - 3-4 punti elenco (bullet points) che sintetizzano i fatti chiave.
-  - Una 'Chiusura' che spieghi perché questa notizia è importante oggi.
 - Formattazione: Usa emoji sobrie per i bullet points. Non usare Markdown complesso, solo grassetti per i punti chiave.
 - Lunghezza: Massimo 1000 caratteri.
-- Output: Restituisci solo il testo del post, senza preamboli come 'Ecco il riassunto'.`;
+- Output: Restituisci solo il testo del post, senza preamboli come 'Ecco il riassunto'.
+
+Regola d'oro: Non inventare mai fatti non presenti nel testo fornito.`;
 
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 50;
@@ -108,17 +118,35 @@ function jsonResponse(
 }
 
 // ---------------------------------------------------------------------------
+// Content Extraction
+// ---------------------------------------------------------------------------
+
+/** Extract the best available text from an RSS feed item */
+function extractArticleText(item: Record<string, unknown>): string {
+  // 1. Valigia Blu puts full content in content:encoded
+  if (item['content:encoded']) return String(item['content:encoded']);
+
+  // 2. Il Post and Linkiesta often use contentSnippet or description
+  if (item['contentSnippet']) return String(item['contentSnippet']);
+  if (item['content']) return String(item['content']);
+
+  // 3. Fallback: title only
+  return String(item['title'] ?? '');
+}
+
+// ---------------------------------------------------------------------------
 // Gemini Integration
 // ---------------------------------------------------------------------------
 
 async function callGemini(
   articleContent: string,
+  sourceName: string,
   apiKey: string,
 ): Promise<string> {
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
-  const prompt = `Trasforma questo articolo in un post social:\n\n${articleContent}`;
+  const prompt = `Fonte: ${sourceName}\n\nTrasforma questo articolo in un post social:\n\n${articleContent}`;
 
   const result = await model.generateContent({
     contents: [{ role: 'user', parts: [{ text: prompt }] }],
@@ -158,16 +186,15 @@ async function processFeed(source: FeedSource, env: Env): Promise<number> {
 
     if (exists) continue;
 
-    // Clean content and call Gemini
-    // 'content:encoded' is a standard RSS 2.0 extension field for full article content
-    const rawContent = item['content:encoded'] || item.content || item.contentSnippet || item.title || '';
+    // Extract best available content using dynamic extraction
+    const rawContent = extractArticleText(item as unknown as Record<string, unknown>);
     const cleanContent = stripHtml(rawContent);
 
     if (cleanContent.length < MIN_CONTENT_LENGTH) continue; // Skip very short content
 
     let summary: string;
     try {
-      summary = await callGemini(cleanContent, env.GEMINI_API_KEY);
+      summary = await callGemini(cleanContent, source.name, env.GEMINI_API_KEY);
     } catch (err) {
       console.error(`Gemini API error for "${item.title}":`, err);
       continue;
@@ -224,10 +251,22 @@ async function handleApiNews(
   const params: (string | number)[] = [];
 
   if (date) {
-    query = 'SELECT *, DATE(published_at) as day FROM news_posts WHERE DATE(published_at) = ?';
+    query = `SELECT *,
+      CASE
+        WHEN date(published_at) = date('now') THEN 'Oggi'
+        WHEN date(published_at) = date('now', '-1 day') THEN 'Ieri'
+        ELSE strftime('%d/%m/%Y', published_at)
+      END as period_label
+    FROM news_posts WHERE DATE(published_at) = ?`;
     params.push(date);
   } else {
-    query = 'SELECT *, DATE(published_at) as day FROM news_posts WHERE 1=1';
+    query = `SELECT *,
+      CASE
+        WHEN date(published_at) = date('now') THEN 'Oggi'
+        WHEN date(published_at) = date('now', '-1 day') THEN 'Ieri'
+        ELSE strftime('%d/%m/%Y', published_at)
+      END as period_label
+    FROM news_posts WHERE 1=1`;
   }
 
   if (source) {
@@ -237,7 +276,7 @@ async function handleApiNews(
 
   // Count total
   const countQuery = query.replace(
-    /SELECT .* FROM/,
+    /SELECT[\s\S]*?FROM/,
     'SELECT COUNT(*) as total FROM',
   );
   const countStmt = env.DB.prepare(countQuery);
