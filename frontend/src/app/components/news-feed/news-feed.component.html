@@ -1,0 +1,57 @@
+<div class="feed-container">
+  <!-- Source filter chips -->
+  <div class="source-filters">
+    <button
+      class="filter-chip"
+      [class.active]="newsService.activeSource() === null"
+      (click)="filterBySource(null)"
+    >
+      Tutte
+    </button>
+    @for (source of sources; track source) {
+      <button
+        class="filter-chip"
+        [class.active]="newsService.activeSource() === source"
+        (click)="filterBySource(source)"
+      >
+        {{ source }}
+      </button>
+    }
+  </div>
+
+  <!-- Grouped news posts -->
+  @for (group of newsService.groupedPosts(); track group.date) {
+    <div class="date-group">
+      <h2 class="date-header">{{ group.label }}</h2>
+      @for (post of group.posts; track post.id) {
+        <app-news-card [post]="post" />
+      }
+    </div>
+  }
+
+  <!-- Loading indicator -->
+  @if (newsService.loading()) {
+    <div class="loading">
+      <div class="spinner"></div>
+      <p>Caricamento notizie...</p>
+    </div>
+  }
+
+  <!-- Empty state -->
+  @if (!newsService.loading() && newsService.posts().length === 0) {
+    <div class="empty-state">
+      <p>📭 Nessuna notizia disponibile al momento.</p>
+      <p class="sub">Le notizie vengono aggiornate ogni ora.</p>
+    </div>
+  }
+
+  <!-- Infinite scroll anchor -->
+  <div #scrollAnchor class="scroll-anchor"></div>
+
+  <!-- End of results -->
+  @if (!newsService.hasMore() && newsService.posts().length > 0) {
+    <div class="end-message">
+      <p>✅ Hai visto tutte le notizie disponibili.</p>
+    </div>
+  }
+</div>
