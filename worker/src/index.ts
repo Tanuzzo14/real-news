@@ -273,19 +273,202 @@ async function collectNewArticles(
   return pending;
 }
 
+// ---------------------------------------------------------------------------
+// Il Post DOM Scraper
+// ---------------------------------------------------------------------------
+
+/**
+ * Il Post blocks RSS feed requests with 403 Forbidden.
+ * Instead, fetch the homepage and extract articles from the HTML DOM using
+ * Cloudflare Workers' built-in HTMLRewriter for robust parsing.
+ */
+async function collectIlPostArticles(env: Env): Promise<PendingArticle[]> {
+  const IL_POST_HOME = 'https://www.ilpost.it/';
+  let response: Response;
+
+  try {
+    response = await fetch(IL_POST_HOME, {
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
+          '(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7',
+        'Cache-Control': 'no-cache',
+      },
+    });
+
+    if (!response.ok) {
+      console.error(
+        `[Il Post] Homepage returned HTTP ${response.status} ${response.statusText}`,
+      );
+      return [];
+    }
+  } catch (err) {
+    console.error('[Il Post] Failed to fetch homepage:', err);
+    return [];
+  }
+
+  interface ScrapedArticle {
+    url: string;
+    title: string;
+    datetime: string;
+    content: string;
+  }
+
+  const scraped: ScrapedArticle[] = [];
+
+  // State shared across HTMLRewriter handlers (processed in document order)
+  let inArticle = false;
+  let current: Partial<ScrapedArticle> = {};
+  let titleBuffer = '';
+  let inTitle = false;
+  let excerptBuffer = '';
+  let inExcerpt = false;
+
+  const transformed = new HTMLRewriter()
+    .on('article', {
+      element(el) {
+        inArticle = true;
+        current = {};
+        titleBuffer = '';
+        excerptBuffer = '';
+        inTitle = false;
+        inExcerpt = false;
+        el.onEndTag(() => {
+          if (current.url && current.title) {
+            scraped.push({
+              url: current.url,
+              title: current.title,
+              datetime: current.datetime || '',
+              content: current.content || current.title,
+            });
+          }
+          inArticle = false;
+        });
+      },
+    })
+    .on('article h2, article h3', {
+      element() {
+        inTitle = inArticle && !current.title;
+        titleBuffer = '';
+      },
+      text(chunk) {
+        if (inTitle) {
+          titleBuffer += chunk.text;
+          if (chunk.lastInTextNode) {
+            const t = titleBuffer.trim();
+            if (t) {
+              current.title = t;
+            }
+            inTitle = false;
+          }
+        }
+      },
+    })
+    .on('article a[href]', {
+      element(el) {
+        if (!inArticle || current.url) return;
+        const href = el.getAttribute('href') ?? '';
+        // Normalise both absolute and root-relative URLs
+        const abs = href.startsWith('http')
+          ? href
+          : `https://www.ilpost.it${href.startsWith('/') ? '' : '/'}${href}`;
+        // Only store dated article URLs (e.g. /2024/05/12/slug/)
+        if (/https:\/\/www\.ilpost\.it\/\d{4}\/\d{2}\/\d{2}\//.test(abs)) {
+          current.url = abs;
+        }
+      },
+    })
+    .on('article time[datetime]', {
+      element(el) {
+        if (inArticle && !current.datetime) {
+          current.datetime = el.getAttribute('datetime') ?? '';
+        }
+      },
+    })
+    .on('article p', {
+      element() {
+        inExcerpt = inArticle && !current.content;
+        excerptBuffer = '';
+      },
+      text(chunk) {
+        if (inExcerpt) {
+          excerptBuffer += chunk.text;
+          if (chunk.lastInTextNode) {
+            const t = excerptBuffer.trim();
+            if (t) {
+              current.content = t;
+            }
+            inExcerpt = false;
+          }
+        }
+      },
+    })
+    .transform(response);
+
+  // Consume the transformed stream to trigger the handlers above
+  await transformed.text();
+
+  console.log(`[Il Post] Found ${scraped.length} article blocks in homepage DOM`);
+
+  const pending: PendingArticle[] = [];
+
+  for (const article of scraped) {
+    // Skip articles already stored
+    const exists = await env.DB.prepare(
+      'SELECT id FROM news_posts WHERE original_url = ?',
+    )
+      .bind(article.url)
+      .first();
+    if (exists) continue;
+
+    const content = article.content || article.title;
+    if (content.length < MIN_CONTENT_LENGTH) continue;
+
+    let publishedAt: string;
+    try {
+      publishedAt = article.datetime
+        ? new Date(article.datetime).toISOString()
+        : new Date().toISOString();
+    } catch {
+      publishedAt = new Date().toISOString();
+    }
+
+    pending.push({
+      source: 'Il Post',
+      originalUrl: article.url,
+      title: article.title,
+      content,
+      publishedAt,
+    });
+  }
+
+  return pending;
+}
+
 async function fetchAllFeeds(env: Env): Promise<Record<string, number>> {
-  console.log('Starting RSS feed fetch...');
+  const startTime = Date.now();
+  const startIso = new Date().toISOString();
+  console.log(`[CRON] ===== Feed fetch started at ${startIso} =====`);
 
   // 1. Collect all new articles from every feed
   const allPending: PendingArticle[] = [];
   for (const source of FEED_SOURCES) {
-    const articles = await collectNewArticles(source, env);
-    console.log(`${source.name}: ${articles.length} new articles to process`);
+    // Il Post RSS feed returns 403 — scrape homepage DOM instead
+    const articles =
+      source.name === 'Il Post'
+        ? await collectIlPostArticles(env)
+        : await collectNewArticles(source, env);
+    console.log(`[CRON] ${source.name}: ${articles.length} new articles to process`);
     allPending.push(...articles);
   }
 
   if (allPending.length === 0) {
-    console.log('No new articles to process.');
+    const duration = Date.now() - startTime;
+    console.log(
+      `[CRON] No new articles found. Finished at ${new Date().toISOString()} (took ${duration}ms)`,
+    );
     return Object.fromEntries(FEED_SOURCES.map((s) => [s.name, 0]));
   }
 
@@ -336,7 +519,11 @@ async function fetchAllFeeds(env: Env): Promise<Record<string, number>> {
     counts[article.source] = (counts[article.source] || 0) + 1;
   }
 
-  console.log('Feed fetch complete.', counts);
+  const duration = Date.now() - startTime;
+  console.log(
+    `[CRON] ===== Feed fetch complete at ${new Date().toISOString()} (took ${duration}ms) =====`,
+    counts,
+  );
   return counts;
 }
 
