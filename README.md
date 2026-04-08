@@ -1,4 +1,4 @@
-# 📰 Real News – Notizie reali, senza rumore
+# 📰 Real News – Notizie reali, senza rumore 
 
 A Progressive Web App (PWA) that aggregates Italian news from trusted sources and transforms them into engaging social-style posts using AI.
 
