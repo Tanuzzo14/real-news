@@ -12,7 +12,7 @@ database_name = "real-news-db"
 database_id = "cb67dbe3-8b17-4763-9dab-cfd59583f268"  # Replace after `wrangler d1 create real-news-db`
 
 # [vars]
-# ALLOWED_ORIGIN = "https://your-app.pages.dev"
+ALLOWED_ORIGIN = "https://real-news.pages.dev"
 
 # Secrets (set via `wrangler secret put GEMINI_API_KEY`):
 # - GEMINI_API_KEY
