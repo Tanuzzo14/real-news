@@ -1,5 +1,4 @@
 import Parser from 'rss-parser';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -7,7 +6,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 
 export interface Env {
   DB: D1Database;
-  GEMINI_API_KEY: string;
+  GROQ_API_KEY: string;
   ALLOWED_ORIGIN?: string;
   ADMIN_SECRET?: string;
 }
@@ -145,20 +144,17 @@ function extractArticleText(item: Record<string, unknown>): string {
 }
 
 // ---------------------------------------------------------------------------
-// Gemini Integration (batched)
+// Groq Integration (batched)
 // ---------------------------------------------------------------------------
 
 /**
- * Send all articles in a single Gemini request.
+ * Send all articles in a single Groq request.
  * Returns one processed post string per input article, in the same order.
  */
-async function callGeminiBatch(
+async function callGroqBatch(
   articles: PendingArticle[],
   apiKey: string,
 ): Promise<string[]> {
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
-
   const articlesText = articles
     .map(
       (a, i) =>
@@ -166,49 +162,52 @@ async function callGeminiBatch(
     )
     .join('\n\n');
 
-  const prompt =
+  const userPrompt =
     `Ti fornirò ${articles.length} articoli. Per ciascuno, crea un post social seguendo le regole del system prompt.\n` +
-    `Restituisci SOLO un array JSON valido con ${articles.length} oggetti, uno per ogni articolo, nel formato:\n` +
-    `[{"index":0,"post":"..."},{"index":1,"post":"..."},...]\n\n` +
+    `Restituisci SOLO un oggetto JSON con una chiave "articles" contenente un array di ${articles.length} oggetti, uno per ogni articolo, nel formato:\n` +
+    `{"articles":[{"index":0,"post":"..."},{"index":1,"post":"..."}]}\n\n` +
     `Articoli:\n\n${articlesText}`;
 
-  const result = await model.generateContent({
-    contents: [{ role: 'user', parts: [{ text: prompt }] }],
-    systemInstruction: { role: 'system', parts: [{ text: SYSTEM_PROMPT }] },
+  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: 'llama-3.3-70b-versatile',
+      messages: [
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: userPrompt },
+      ],
+      response_format: { type: 'json_object' },
+      temperature: 0.3,
+    }),
   });
 
-  const responseText = result.response.text();
-
-  // Strip markdown code fences then extract the JSON array by counting brackets
-  const stripped = responseText.replace(/```(?:json)?\n?/g, '').trim();
-  const start = stripped.indexOf('[');
-  if (start === -1) {
-    throw new Error(`Gemini batch response did not contain a JSON array: ${responseText.slice(0, 200)}`);
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Groq API error ${response.status}: ${errorText.slice(0, 200)}`);
   }
-  let depth = 0;
-  let end = -1;
-  for (let i = start; i < stripped.length; i++) {
-    if (stripped[i] === '[') depth++;
-    else if (stripped[i] === ']') {
-      depth--;
-      if (depth === 0) { end = i; break; }
-    }
-  }
-  if (end === -1) {
-    throw new Error(`Gemini batch response contains an unterminated JSON array: ${responseText.slice(0, 200)}`);
-  }
-  const jsonStr = stripped.slice(start, end + 1);
 
-  const parsed: { index: number; post: string }[] = JSON.parse(jsonStr);
+  const data = await response.json() as {
+    choices: Array<{ message: { content: string } }>;
+  };
 
-  if (parsed.length !== articles.length) {
+  const responseText = data.choices[0]?.message?.content ?? '';
+  if (!responseText) {
+    throw new Error('Groq API returned an empty response');
+  }
+  const parsed: { articles?: { index: number; post: string }[] } = JSON.parse(responseText);
+
+  if (!parsed.articles || !Array.isArray(parsed.articles) || parsed.articles.length !== articles.length) {
     throw new Error(
-      `Gemini batch response length mismatch: expected ${articles.length} items, got ${parsed.length}`,
+      `Groq batch response length mismatch: expected ${articles.length} items, got ${parsed.articles?.length}`,
     );
   }
 
   // Sort by index to guarantee correct order, then extract the post text
-  return parsed
+  return parsed.articles
     .sort((a, b) => a.index - b.index)
     .map((p) => p.post);
 }
@@ -286,12 +285,12 @@ async function fetchAllFeeds(env: Env): Promise<Record<string, number>> {
     return Object.fromEntries(FEED_SOURCES.map((s) => [s.name, 0]));
   }
 
-  // 2. Single batched Gemini call for all articles
+  // 2. Single batched Groq call for all articles
   let summaries: string[];
   try {
-    summaries = await callGeminiBatch(allPending, env.GEMINI_API_KEY);
+    summaries = await callGroqBatch(allPending, env.GROQ_API_KEY);
   } catch (err) {
-    console.error('Gemini batch API error:', err);
+    console.error('Groq batch API error:', err);
     return Object.fromEntries(FEED_SOURCES.map((s) => [s.name, 0]));
   }
 

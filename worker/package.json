@@ -9,8 +9,7 @@
     "db:migrate:remote": "wrangler d1 execute real-news-db --remote --file=./migrations/0001_create_news_posts.sql"
   },
   "dependencies": {
-    "rss-parser": "^3.13.0",
-    "@google/generative-ai": "^0.21.0"
+    "rss-parser": "^3.13.0"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20240117.0",
