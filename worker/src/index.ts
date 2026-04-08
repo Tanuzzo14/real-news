@@ -293,7 +293,8 @@ async function fetchAllFeeds(env: Env): Promise<Record<string, number>> {
   const truncated = allPending.map((a) => ({
     ...a,
     content: a.content.length > MAX_ARTICLE_CONTENT_LENGTH
-      ? a.content.slice(0, MAX_ARTICLE_CONTENT_LENGTH) + '…'
+      // Remove any dangling high surrogate left by slice() to avoid encoding issues
+      ? a.content.slice(0, MAX_ARTICLE_CONTENT_LENGTH).replace(/[\uD800-\uDBFF]$/, '') + '…'
       : a.content,
   }));
 
