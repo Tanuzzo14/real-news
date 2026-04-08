@@ -168,7 +168,12 @@ async function processFeed(source: FeedSource, env: Env): Promise<number> {
   let feed;
 
   try {
-    feed = await parser.parseURL(source.url);
+    const response = await fetch(source.url);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status} ${response.statusText}`);
+    }
+    const xml = await response.text();
+    feed = await parser.parseString(xml);
   } catch (err) {
     console.error(`Failed to fetch feed from ${source.name}:`, err);
     return 0;
