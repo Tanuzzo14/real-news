@@ -33,7 +33,16 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   }
 
   const url = new URL(request.url);
-  const targetUrl = new URL(url.pathname + url.search, env.WORKER_URL);
+  let targetUrl: URL;
+  try {
+    targetUrl = new URL(url.pathname + url.search, env.WORKER_URL);
+  } catch (err) {
+    console.error('Pages proxy: failed to construct target URL from WORKER_URL:', err);
+    return new Response(
+      JSON.stringify({ error: 'WORKER_URL is invalid or misconfigured' }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } },
+    );
+  }
 
   const headers = new Headers();
   for (const name of FORWARDED_HEADERS) {

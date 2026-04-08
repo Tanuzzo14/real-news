@@ -11,7 +11,7 @@ binding = "DB"
 database_name = "real-news-db"
 database_id = "cb67dbe3-8b17-4763-9dab-cfd59583f268"  # Replace after `wrangler d1 create real-news-db`
 
-# [vars]
+[vars]
 ALLOWED_ORIGIN = "https://real-news.pages.dev"
 
 [observability]
