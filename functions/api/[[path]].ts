@@ -2,6 +2,19 @@ interface Env {
   WORKER_URL: string;
 }
 
+const ALLOWED_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']);
+const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH']);
+
+// Only forward headers that are safe to proxy to the upstream Worker
+const FORWARDED_HEADERS = [
+  'accept',
+  'accept-language',
+  'authorization',
+  'cache-control',
+  'content-type',
+  'x-requested-with',
+];
+
 export const onRequest: PagesFunction<Env> = async (context) => {
   const { request, env } = context;
 
@@ -12,12 +25,38 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     );
   }
 
+  if (!ALLOWED_METHODS.has(request.method)) {
+    return new Response(
+      JSON.stringify({ error: 'Method not allowed' }),
+      { status: 405, headers: { 'Content-Type': 'application/json' } },
+    );
+  }
+
   const url = new URL(request.url);
   const targetUrl = new URL(url.pathname + url.search, env.WORKER_URL);
 
-  return fetch(targetUrl.toString(), {
-    method: request.method,
-    headers: request.headers,
-    body: request.method === 'GET' || request.method === 'HEAD' ? undefined : request.body,
-  });
+  const headers = new Headers();
+  for (const name of FORWARDED_HEADERS) {
+    const value = request.headers.get(name);
+    if (value !== null) {
+      headers.set(name, value);
+    }
+  }
+
+  try {
+    // Buffer the body for methods that include a request body to avoid stream issues
+    const body = BODY_METHODS.has(request.method) ? await request.arrayBuffer() : undefined;
+
+    return await fetch(targetUrl.toString(), {
+      method: request.method,
+      headers,
+      body,
+    });
+  } catch (err) {
+    console.error('Pages proxy error forwarding to Worker:', err);
+    return new Response(
+      JSON.stringify({ error: 'Failed to reach the Worker. Please try again later.' }),
+      { status: 502, headers: { 'Content-Type': 'application/json' } },
+    );
+  }
 };
