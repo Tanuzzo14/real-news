@@ -510,7 +510,7 @@ async function fetchAllFeeds(env: Env): Promise<Record<string, number>> {
     }
 
     await env.DB.prepare(
-      `INSERT INTO news_posts (source, original_url, title, content_summary, published_at)
+      `INSERT OR IGNORE INTO news_posts (source, original_url, title, content_summary, published_at)
        VALUES (?, ?, ?, ?, ?)`,
     )
       .bind(article.source, article.originalUrl, article.title, summary, article.publishedAt)
