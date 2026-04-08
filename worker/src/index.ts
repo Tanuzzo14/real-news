@@ -300,7 +300,7 @@ async function handleApiNews(
 
   return jsonResponse(
     {
-      data: results,
+      data: results ?? [],
       pagination: {
         page,
         pageSize,
