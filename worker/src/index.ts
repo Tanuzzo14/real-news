@@ -27,6 +27,14 @@ interface FeedSource {
   url: string;
 }
 
+interface PendingArticle {
+  source: string;
+  originalUrl: string;
+  title: string;
+  content: string;
+  publishedAt: string;
+}
+
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -137,33 +145,83 @@ function extractArticleText(item: Record<string, unknown>): string {
 }
 
 // ---------------------------------------------------------------------------
-// Gemini Integration
+// Gemini Integration (batched)
 // ---------------------------------------------------------------------------
 
-async function callGemini(
-  articleContent: string,
-  sourceName: string,
+/**
+ * Send all articles in a single Gemini request.
+ * Returns one processed post string per input article, in the same order.
+ */
+async function callGeminiBatch(
+  articles: PendingArticle[],
   apiKey: string,
-): Promise<string> {
+): Promise<string[]> {
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
-  const prompt = `Fonte: ${sourceName}\n\nTrasforma questo articolo in un post social:\n\n${articleContent}`;
+  const articlesText = articles
+    .map(
+      (a, i) =>
+        `--- ARTICOLO ${i + 1} ---\nFonte: ${a.source}\n\n${a.content}`,
+    )
+    .join('\n\n');
+
+  const prompt =
+    `Ti fornirò ${articles.length} articoli. Per ciascuno, crea un post social seguendo le regole del system prompt.\n` +
+    `Restituisci SOLO un array JSON valido con ${articles.length} oggetti, uno per ogni articolo, nel formato:\n` +
+    `[{"index":0,"post":"..."},{"index":1,"post":"..."},...]\n\n` +
+    `Articoli:\n\n${articlesText}`;
 
   const result = await model.generateContent({
     contents: [{ role: 'user', parts: [{ text: prompt }] }],
     systemInstruction: { role: 'system', parts: [{ text: SYSTEM_PROMPT }] },
   });
 
-  const response = result.response;
-  return response.text();
+  const responseText = result.response.text();
+
+  // Strip markdown code fences then extract the JSON array by counting brackets
+  const stripped = responseText.replace(/```(?:json)?\n?/g, '').trim();
+  const start = stripped.indexOf('[');
+  if (start === -1) {
+    throw new Error(`Gemini batch response did not contain a JSON array: ${responseText.slice(0, 200)}`);
+  }
+  let depth = 0;
+  let end = -1;
+  for (let i = start; i < stripped.length; i++) {
+    if (stripped[i] === '[') depth++;
+    else if (stripped[i] === ']') {
+      depth--;
+      if (depth === 0) { end = i; break; }
+    }
+  }
+  if (end === -1) {
+    throw new Error(`Gemini batch response contains an unterminated JSON array: ${responseText.slice(0, 200)}`);
+  }
+  const jsonStr = stripped.slice(start, end + 1);
+
+  const parsed: { index: number; post: string }[] = JSON.parse(jsonStr);
+
+  if (parsed.length !== articles.length) {
+    throw new Error(
+      `Gemini batch response length mismatch: expected ${articles.length} items, got ${parsed.length}`,
+    );
+  }
+
+  // Sort by index to guarantee correct order, then extract the post text
+  return parsed
+    .sort((a, b) => a.index - b.index)
+    .map((p) => p.post);
 }
 
 // ---------------------------------------------------------------------------
 // RSS Fetcher (Cron Trigger)
 // ---------------------------------------------------------------------------
 
-async function processFeed(source: FeedSource, env: Env): Promise<number> {
+/** Fetch one RSS feed and return new articles that are not yet in the DB. */
+async function collectNewArticles(
+  source: FeedSource,
+  env: Env,
+): Promise<PendingArticle[]> {
   const parser = new Parser();
   let feed;
 
@@ -176,15 +234,15 @@ async function processFeed(source: FeedSource, env: Env): Promise<number> {
     feed = await parser.parseString(xml);
   } catch (err) {
     console.error(`Failed to fetch feed from ${source.name}:`, err);
-    return 0;
+    return [];
   }
 
-  let newPosts = 0;
+  const pending: PendingArticle[] = [];
 
   for (const item of feed.items) {
     if (!item.link) continue;
 
-    // Check if article already exists
+    // Skip articles already stored
     const exists = await env.DB.prepare(
       'SELECT id FROM news_posts WHERE original_url = ?',
     )
@@ -193,50 +251,75 @@ async function processFeed(source: FeedSource, env: Env): Promise<number> {
 
     if (exists) continue;
 
-    // Extract best available content using dynamic extraction
     const rawContent = extractArticleText(item as unknown as Record<string, unknown>);
     const cleanContent = stripHtml(rawContent);
 
-    if (cleanContent.length < MIN_CONTENT_LENGTH) continue; // Skip very short content
+    if (cleanContent.length < MIN_CONTENT_LENGTH) continue;
 
-    let summary: string;
-    try {
-      summary = await callGemini(cleanContent, source.name, env.GEMINI_API_KEY);
-    } catch (err) {
-      console.error(`Gemini API error for "${item.title}":`, err);
-      continue;
-    }
-
-    // Save to D1
-    const publishedAt = item.pubDate
-      ? new Date(item.pubDate).toISOString()
-      : new Date().toISOString();
-
-    await env.DB.prepare(
-      `INSERT INTO news_posts (source, original_url, title, content_summary, published_at)
-       VALUES (?, ?, ?, ?, ?)`,
-    )
-      .bind(source.name, item.link, item.title || '', summary, publishedAt)
-      .run();
-
-    newPosts++;
+    pending.push({
+      source: source.name,
+      originalUrl: item.link,
+      title: item.title || '',
+      content: cleanContent,
+      publishedAt: item.pubDate
+        ? new Date(item.pubDate).toISOString()
+        : new Date().toISOString(),
+    });
   }
 
-  return newPosts;
+  return pending;
 }
 
 async function fetchAllFeeds(env: Env): Promise<Record<string, number>> {
   console.log('Starting RSS feed fetch...');
 
-  const results: Record<string, number> = {};
+  // 1. Collect all new articles from every feed
+  const allPending: PendingArticle[] = [];
   for (const source of FEED_SOURCES) {
-    const count = await processFeed(source, env);
-    results[source.name] = count;
-    console.log(`${source.name}: ${count} new posts`);
+    const articles = await collectNewArticles(source, env);
+    console.log(`${source.name}: ${articles.length} new articles to process`);
+    allPending.push(...articles);
   }
 
-  console.log('Feed fetch complete.');
-  return results;
+  if (allPending.length === 0) {
+    console.log('No new articles to process.');
+    return Object.fromEntries(FEED_SOURCES.map((s) => [s.name, 0]));
+  }
+
+  // 2. Single batched Gemini call for all articles
+  let summaries: string[];
+  try {
+    summaries = await callGeminiBatch(allPending, env.GEMINI_API_KEY);
+  } catch (err) {
+    console.error('Gemini batch API error:', err);
+    return Object.fromEntries(FEED_SOURCES.map((s) => [s.name, 0]));
+  }
+
+  // 3. Save results to D1
+  const counts: Record<string, number> = Object.fromEntries(
+    FEED_SOURCES.map((s) => [s.name, 0]),
+  );
+
+  for (let i = 0; i < allPending.length; i++) {
+    const article = allPending[i];
+    const summary = summaries[i];
+    if (!summary) {
+      console.error(`Missing summary for article index ${i}: "${article.title}"`);
+      continue;
+    }
+
+    await env.DB.prepare(
+      `INSERT INTO news_posts (source, original_url, title, content_summary, published_at)
+       VALUES (?, ?, ?, ?, ?)`,
+    )
+      .bind(article.source, article.originalUrl, article.title, summary, article.publishedAt)
+      .run();
+
+    counts[article.source] = (counts[article.source] || 0) + 1;
+  }
+
+  console.log('Feed fetch complete.', counts);
+  return counts;
 }
 
 // ---------------------------------------------------------------------------
