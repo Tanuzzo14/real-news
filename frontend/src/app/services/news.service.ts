@@ -4,6 +4,8 @@ import { Observable } from 'rxjs';
 import { NewsResponse, NewsPost, GroupedNews } from '../models/news.model';
 import { environment } from '../../environments/environment';
 
+const MS_PER_DAY = 86_400_000;
+
 @Injectable({
   providedIn: 'root',
 })
@@ -29,7 +31,7 @@ export class NewsService {
   readonly groupedPosts = computed<GroupedNews[]>(() => {
     const allPosts = this.posts();
     const today = new Date().toISOString().split('T')[0];
-    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+    const yesterday = new Date(Date.now() - MS_PER_DAY).toISOString().split('T')[0];
 
     const groups = new Map<string, NewsPost[]>();
 

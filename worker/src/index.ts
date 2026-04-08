@@ -50,6 +50,7 @@ Regole di Stile:
 
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 50;
+const MIN_CONTENT_LENGTH = 50;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -57,16 +58,28 @@ const MAX_PAGE_SIZE = 50;
 
 /** Strip HTML tags from a string */
 function stripHtml(html: string): string {
-  return html
-    .replace(/<[^>]*>/g, '')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#039;/g, "'")
-    .replace(/\s+/g, ' ')
-    .trim();
+  // Use a loop to fully remove nested/recursive HTML tags
+  let text = html;
+  let previous: string;
+  do {
+    previous = text;
+    text = text.replace(/<[^>]*>/g, '');
+  } while (text !== previous);
+
+  // Decode common HTML entities
+  const entities: Record<string, string> = {
+    '&nbsp;': ' ',
+    '&amp;': '&',
+    '&lt;': '<',
+    '&gt;': '>',
+    '&quot;': '"',
+    '&#039;': "'",
+  };
+  for (const [entity, char] of Object.entries(entities)) {
+    text = text.split(entity).join(char);
+  }
+
+  return text.replace(/\s+/g, ' ').trim();
 }
 
 /** Build CORS headers */
@@ -146,10 +159,11 @@ async function processFeed(source: FeedSource, env: Env): Promise<number> {
     if (exists) continue;
 
     // Clean content and call Gemini
+    // 'content:encoded' is a standard RSS 2.0 extension field for full article content
     const rawContent = item['content:encoded'] || item.content || item.contentSnippet || item.title || '';
     const cleanContent = stripHtml(rawContent);
 
-    if (cleanContent.length < 50) continue; // Skip very short content
+    if (cleanContent.length < MIN_CONTENT_LENGTH) continue; // Skip very short content
 
     let summary: string;
     try {
