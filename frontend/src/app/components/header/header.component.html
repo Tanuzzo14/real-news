@@ -1,22 +1,143 @@
-<header class="sticky top-0 z-50 backdrop-blur-lg bg-[var(--color-surface)]/90 border-b border-[var(--color-separator)]">
-  <div class="mx-auto max-w-xl flex items-center justify-between px-4 h-12">
-    <!-- Logo -->
-    <div class="flex items-center gap-2">
-      <span class="text-lg font-extrabold tracking-tight text-[var(--color-text-primary)]">
-        SocialNews
-      </span>
-    </div>
+<header class="sticky top-0 z-50 backdrop-blur-lg bg-[var(--color-surface)]/80 border-b border-[var(--color-separator)]">
+  <div class="mx-auto max-w-xl flex items-center justify-between px-4 h-14">
 
-    <!-- Theme toggle -->
-    <button
-      (click)="themeService.toggle()"
-      class="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium
-             text-[var(--color-text-secondary)] hover:bg-[var(--color-separator)]
-             active:scale-95 transition-all duration-150"
-      [attr.aria-label]="'Tema: ' + themeLabel"
-    >
-      <span class="text-sm">{{ themeIcon }}</span>
-      <span>{{ themeLabel }}</span>
-    </button>
+    <!-- Logo -->
+    <span class="text-lg font-extrabold tracking-tight text-[var(--color-text-primary)]">
+      Real News
+    </span>
+
+    <!-- Right actions -->
+    <div class="flex items-center gap-2">
+
+      <!-- Support button -->
+      <a
+        href="https://www.paypal.me/tuousername"
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="Supporta il progetto"
+        class="group flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[var(--color-separator)]
+               text-xs font-medium text-[var(--color-text-secondary)]
+               hover:border-blue-400 hover:text-blue-400
+               active:scale-95 transition-all duration-150"
+      >
+        <!-- Heart icon (hidden on very small screens, shown from sm) -->
+        <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+        </svg>
+        <span class="hidden sm:inline">Supporta</span>
+      </a>
+
+      <!-- Install button — hidden when already installed or on desktop without prompt -->
+      @if (!installService.isStandalone() && (installService.os() === 'ios' || installService.os() === 'android')) {
+        <button
+          (click)="onInstallClick()"
+          aria-label="Installa l'app"
+          class="flex items-center gap-1.5 px-3 py-1.5 rounded-full
+                 bg-[var(--color-accent)] text-white text-xs font-semibold
+                 hover:opacity-90 active:scale-95 transition-all duration-150"
+        >
+          <!-- Download / add icon -->
+          <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 3v13M7 11l5 5 5-5"/>
+            <path d="M5 21h14"/>
+          </svg>
+          <span class="hidden sm:inline">Installa</span>
+        </button>
+      }
+
+      <!-- Theme toggle -->
+      <button
+        (click)="themeService.toggle()"
+        class="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium
+               text-[var(--color-text-secondary)] hover:bg-[var(--color-separator)]
+               active:scale-95 transition-all duration-150"
+        [attr.aria-label]="'Tema: ' + themeLabel"
+      >
+        <span class="text-sm">{{ themeIcon }}</span>
+        <span class="hidden sm:inline">{{ themeLabel }}</span>
+      </button>
+
+    </div>
   </div>
 </header>
+
+<!-- iOS install bottom sheet -->
+@if (installService.os() === 'ios' && !installService.isStandalone()) {
+  <!-- Backdrop -->
+  <div
+    class="fixed inset-0 z-40 bg-black/40 transition-opacity duration-300"
+    [class.opacity-0]="!showIOSSheet()"
+    [class.pointer-events-none]="!showIOSSheet()"
+    (click)="closeIOSSheet()"
+    aria-hidden="true"
+  ></div>
+
+  <!-- Sheet panel -->
+  <div
+    class="fixed bottom-0 left-0 right-0 z-50
+           bg-[var(--color-surface-card)] rounded-t-2xl shadow-2xl
+           transition-transform duration-300 ease-out"
+    [class.translate-y-full]="!showIOSSheet()"
+    [class.translate-y-0]="showIOSSheet()"
+    role="dialog"
+    aria-modal="true"
+    aria-label="Istruzioni per installare l'app su iOS"
+  >
+    <!-- Handle bar -->
+    <div class="flex justify-center pt-3 pb-1">
+      <div class="w-10 h-1 rounded-full bg-[var(--color-separator)]"></div>
+    </div>
+
+    <div class="px-6 pb-8 pt-4">
+      <h2 class="text-base font-bold text-[var(--color-text-primary)] mb-1">
+        Aggiungi alla schermata Home
+      </h2>
+      <p class="text-xs text-[var(--color-text-muted)] mb-6">
+        Segui questi passi per installare Real News sul tuo iPhone o iPad.
+      </p>
+
+      <!-- Step 1 -->
+      <div class="flex items-start gap-4 mb-5">
+        <div class="flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-600 text-sm font-bold shrink-0">1</div>
+        <div>
+          <p class="text-sm font-medium text-[var(--color-text-primary)]">Tocca l'icona Condividi</p>
+          <p class="text-xs text-[var(--color-text-secondary)] mt-0.5">Quella con il quadrato e la freccia verso l'alto, in fondo a Safari.</p>
+          <svg class="mt-2 w-7 h-7 text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="5" y="8" width="14" height="13" rx="2"/>
+            <path d="M12 3v10M9 6l3-3 3 3"/>
+          </svg>
+        </div>
+      </div>
+
+      <!-- Step 2 -->
+      <div class="flex items-start gap-4 mb-5">
+        <div class="flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-600 text-sm font-bold shrink-0">2</div>
+        <div>
+          <p class="text-sm font-medium text-[var(--color-text-primary)]">Scorri verso il basso</p>
+          <p class="text-xs text-[var(--color-text-secondary)] mt-0.5">Nel menu di condivisione, fai scorrere le opzioni verso l'alto.</p>
+        </div>
+      </div>
+
+      <!-- Step 3 -->
+      <div class="flex items-start gap-4">
+        <div class="flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-600 text-sm font-bold shrink-0">3</div>
+        <div>
+          <p class="text-sm font-medium text-[var(--color-text-primary)]">Seleziona "Aggiungi alla schermata Home"</p>
+          <p class="text-xs text-[var(--color-text-secondary)] mt-0.5">Tocca il pulsante e poi "Aggiungi" in alto a destra.</p>
+          <svg class="mt-2 w-7 h-7 text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="3" y="3" width="18" height="18" rx="3"/>
+            <path d="M12 8v8M8 12h8"/>
+          </svg>
+        </div>
+      </div>
+
+      <button
+        (click)="closeIOSSheet()"
+        class="mt-8 w-full py-3 rounded-full bg-[var(--color-accent)] text-white text-sm font-semibold
+               active:scale-95 transition-all duration-150"
+      >
+        Chiudi
+      </button>
+    </div>
+  </div>
+}
