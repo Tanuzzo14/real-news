@@ -16,8 +16,10 @@ ALLOWED_ORIGIN = "https://real-news.pages.dev"
 
 [observability]
 [observability.logs]
-enabled = false
+enabled = true
 invocation_logs = true
+
+[observability.traces]
 
 [observability.traces]
 enabled = false
