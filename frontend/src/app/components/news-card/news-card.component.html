@@ -1,0 +1,23 @@
+<article class="news-card">
+  <div class="card-header">
+    <span class="source-badge" [style.backgroundColor]="sourceColor">
+      {{ post.source }}
+    </span>
+    <span class="time">{{ formattedTime }}</span>
+  </div>
+
+  <div class="card-body">
+    <div class="content-summary" [innerHTML]="post.content_summary"></div>
+  </div>
+
+  <div class="card-footer">
+    <a
+      [href]="post.original_url"
+      target="_blank"
+      rel="noopener noreferrer"
+      class="read-original"
+    >
+      📰 Leggi originale
+    </a>
+  </div>
+</article>
