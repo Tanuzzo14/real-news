@@ -509,12 +509,17 @@ async function fetchAllFeeds(env: Env): Promise<Record<string, number>> {
       continue;
     }
 
-    await env.DB.prepare(
-      `INSERT INTO news_posts (source, original_url, title, content_summary, published_at)
+    const result = await env.DB.prepare(
+      `INSERT OR IGNORE INTO news_posts (source, original_url, title, content_summary, published_at)
        VALUES (?, ?, ?, ?, ?)`,
     )
       .bind(article.source, article.originalUrl, article.title, summary, article.publishedAt)
       .run();
+
+    if (result.meta.changes === 0) {
+      console.log(`[CRON] Skipped duplicate article: "${article.title}" (${article.originalUrl})`);
+      continue;
+    }
 
     counts[article.source] = (counts[article.source] || 0) + 1;
   }
