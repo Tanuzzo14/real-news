@@ -1,23 +1,66 @@
-<article class="news-card">
-  <div class="card-header">
-    <span class="source-badge" [style.backgroundColor]="sourceColor">
+<article
+  class="py-5 border-b border-[var(--color-separator)] transition-colors duration-150"
+  [style.backgroundColor]="pressed ? 'var(--color-separator)' : 'transparent'"
+  (pointerdown)="pressed = true"
+  (pointerup)="pressed = false"
+  (pointerleave)="pressed = false"
+>
+  <!-- Source + relative time -->
+  <div class="flex items-center gap-2 mb-2.5">
+    <div
+      class="w-5 h-5 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0"
+      [style.backgroundColor]="sourceColor"
+    >
+      {{ sourceInitial }}
+    </div>
+    <span class="text-sm font-semibold text-[var(--color-text-primary)]">
       {{ post.source }}
     </span>
-    <span class="time">{{ formattedTime }}</span>
+    <span class="text-xs text-[var(--color-text-muted)] ml-auto">
+      {{ relativeTime }}
+    </span>
   </div>
 
-  <div class="card-body">
-    <div class="content-summary">{{ post.content_summary }}</div>
-  </div>
+  <!-- Title -->
+  @if (hasTitle) {
+    <h3 class="text-base font-extrabold leading-snug text-[var(--color-text-primary)] mb-2">
+      {{ post.title }}
+    </h3>
+  }
 
-  <div class="card-footer">
-    <a
-      [href]="post.original_url"
-      target="_blank"
-      rel="noopener noreferrer"
-      class="read-original"
-    >
-      📰 Leggi originale
-    </a>
-  </div>
+  <!-- Summary as bullet points -->
+  @if (summaryPoints.length > 1) {
+    <ul class="space-y-1.5 mb-4">
+      @for (point of summaryPoints; track $index) {
+        <li class="flex items-start gap-2 text-sm leading-relaxed text-[var(--color-text-secondary)]">
+          <span class="w-1.5 h-1.5 rounded-full bg-[var(--color-text-muted)] mt-2 shrink-0"></span>
+          <span>{{ point }}</span>
+        </li>
+      }
+    </ul>
+  } @else if (summaryPoints.length === 1) {
+    <p class="text-sm leading-relaxed text-[var(--color-text-secondary)] mb-4">
+      {{ summaryPoints[0] }}
+    </p>
+  }
+
+  <!-- Full-width "Read Original" button -->
+  <a
+    [href]="post.original_url"
+    target="_blank"
+    rel="noopener noreferrer"
+    class="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl
+           bg-[var(--color-separator)] text-[var(--color-accent)]
+           text-sm font-semibold
+           hover:bg-[var(--color-accent)]/10
+           active:scale-[0.98] transition-all duration-150
+           min-h-[44px]"
+  >
+    <span>Leggi l'originale</span>
+    <!-- External link icon -->
+    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+      <path stroke-linecap="round" stroke-linejoin="round"
+            d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+    </svg>
+  </a>
 </article>

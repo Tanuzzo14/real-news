@@ -1,17 +1,37 @@
-<div class="feed-container">
+<div #feedContainer class="mx-auto max-w-xl px-4 pb-20 pt-2">
+  <!-- Pull-to-refresh indicator -->
+  @if (pullDistance() > 0 || refreshing()) {
+    <div
+      class="flex items-center justify-center overflow-hidden transition-all duration-200"
+      [style.height.px]="refreshing() ? 48 : pullDistance()"
+    >
+      <div
+        class="w-6 h-6 border-2 border-[var(--color-text-muted)] border-t-[var(--color-accent)] rounded-full"
+        [class.animate-spin]="refreshing() || pullDistance() >= 80"
+        [style.opacity]="refreshing() ? 1 : pullOpacity()"
+      ></div>
+    </div>
+  }
+
   <!-- Source filter chips -->
-  <div class="source-filters">
+  <div class="flex gap-2 py-3 overflow-x-auto scrollbar-hide -mx-4 px-4">
     <button
-      class="filter-chip"
-      [class.active]="newsService.activeSource() === null"
+      class="shrink-0 px-4 py-2 rounded-full text-sm font-medium
+             transition-all duration-150 active:scale-95 min-h-[36px]"
+      [class]="newsService.activeSource() === null
+        ? 'bg-[var(--color-text-primary)] text-[var(--color-surface)]'
+        : 'bg-[var(--color-separator)] text-[var(--color-text-secondary)]'"
       (click)="filterBySource(null)"
     >
       Tutte
     </button>
     @for (source of sources; track source) {
       <button
-        class="filter-chip"
-        [class.active]="newsService.activeSource() === source"
+        class="shrink-0 px-4 py-2 rounded-full text-sm font-medium
+               transition-all duration-150 active:scale-95 min-h-[36px]"
+        [class]="newsService.activeSource() === source
+          ? 'bg-[var(--color-text-primary)] text-[var(--color-surface)]'
+          : 'bg-[var(--color-separator)] text-[var(--color-text-secondary)]'"
         (click)="filterBySource(source)"
       >
         {{ source }}
@@ -19,39 +39,55 @@
     }
   </div>
 
-  <!-- Grouped news posts -->
-  @for (group of newsService.groupedPosts(); track group.date) {
-    <div class="date-group">
-      <h2 class="date-header">{{ group.label }}</h2>
-      @for (post of group.posts; track post.id) {
-        <app-news-card [post]="post" />
-      }
-    </div>
-  }
+  <!-- Skeleton screens during initial load -->
+  @if (initialLoading() && newsService.posts().length === 0) {
+    <app-skeleton-card [count]="4" />
+  } @else {
+    <!-- Grouped news posts with sticky date headers -->
+    @for (group of newsService.groupedPosts(); track group.date) {
+      <div class="relative">
+        <h2
+          class="sticky top-12 z-10 py-2
+                 bg-[var(--color-surface)]/95 backdrop-blur-sm
+                 text-xs font-bold uppercase tracking-wider
+                 text-[var(--color-text-muted)]"
+        >
+          {{ group.label }}
+        </h2>
+        @for (post of group.posts; track post.id) {
+          <app-news-card [post]="post" />
+        }
+      </div>
+    }
 
-  <!-- Loading indicator -->
-  @if (newsService.loading()) {
-    <div class="loading">
-      <div class="spinner"></div>
-      <p>Caricamento notizie...</p>
-    </div>
-  }
+    <!-- Loading more indicator -->
+    @if (newsService.loading() && newsService.posts().length > 0) {
+      <div class="flex justify-center py-8">
+        <div class="w-6 h-6 border-2 border-[var(--color-separator)] border-t-[var(--color-text-muted)] rounded-full animate-spin"></div>
+      </div>
+    }
 
-  <!-- Empty state -->
-  @if (!newsService.loading() && newsService.posts().length === 0) {
-    <div class="empty-state">
-      <p>📭 Nessuna notizia disponibile al momento.</p>
-      <p class="sub">Le notizie vengono aggiornate ogni ora.</p>
-    </div>
+    <!-- Empty state -->
+    @if (!newsService.loading() && newsService.posts().length === 0) {
+      <div class="text-center py-16">
+        <p class="text-4xl mb-3">📭</p>
+        <p class="text-base font-semibold text-[var(--color-text-primary)] mb-1">
+          Nessuna notizia disponibile
+        </p>
+        <p class="text-sm text-[var(--color-text-muted)]">
+          Le notizie vengono aggiornate ogni ora.
+        </p>
+      </div>
+    }
   }
 
   <!-- Infinite scroll anchor -->
-  <div #scrollAnchor class="scroll-anchor"></div>
+  <div #scrollAnchor class="h-px"></div>
 
   <!-- End of results -->
   @if (!newsService.hasMore() && newsService.posts().length > 0) {
-    <div class="end-message">
-      <p>✅ Hai visto tutte le notizie disponibili.</p>
+    <div class="text-center py-8 text-sm text-[var(--color-text-muted)]">
+      ✅ Hai visto tutte le notizie disponibili.
     </div>
   }
 </div>

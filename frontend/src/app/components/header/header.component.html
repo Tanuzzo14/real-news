@@ -1,6 +1,22 @@
-<header class="app-header">
-  <div class="header-content">
-    <h1 class="logo">📰 Real News</h1>
-    <p class="tagline">Notizie reali, senza rumore.</p>
+<header class="sticky top-0 z-50 backdrop-blur-lg bg-[var(--color-surface)]/90 border-b border-[var(--color-separator)]">
+  <div class="mx-auto max-w-xl flex items-center justify-between px-4 h-12">
+    <!-- Logo -->
+    <div class="flex items-center gap-2">
+      <span class="text-lg font-extrabold tracking-tight text-[var(--color-text-primary)]">
+        SocialNews
+      </span>
+    </div>
+
+    <!-- Theme toggle -->
+    <button
+      (click)="themeService.toggle()"
+      class="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium
+             text-[var(--color-text-secondary)] hover:bg-[var(--color-separator)]
+             active:scale-95 transition-all duration-150"
+      [attr.aria-label]="'Tema: ' + themeLabel"
+    >
+      <span class="text-sm">{{ themeIcon }}</span>
+      <span>{{ themeLabel }}</span>
+    </button>
   </div>
 </header>
