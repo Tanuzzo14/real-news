@@ -69,6 +69,10 @@ Regola d'oro: Non inventare mai fatti non presenti nel testo fornito.`;
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 50;
 const MIN_CONTENT_LENGTH = 50;
+// Max characters of article content sent to Groq per article (keeps token count low)
+const MAX_ARTICLE_CONTENT_LENGTH = 1500;
+// Max articles per single Groq request (avoids 413 TPM limit errors)
+const GROQ_BATCH_SIZE = 5;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -285,16 +289,30 @@ async function fetchAllFeeds(env: Env): Promise<Record<string, number>> {
     return Object.fromEntries(FEED_SOURCES.map((s) => [s.name, 0]));
   }
 
-  // 2. Single batched Groq call for all articles
-  let summaries: string[];
-  try {
-    summaries = await callGroqBatch(allPending, env.GROQ_API_KEY);
-  } catch (err) {
-    console.error('Groq batch API error:', err);
-    return Object.fromEntries(FEED_SOURCES.map((s) => [s.name, 0]));
+  // 2. Truncate article content to keep each Groq request within token limits
+  const truncated = allPending.map((a) => ({
+    ...a,
+    content: a.content.length > MAX_ARTICLE_CONTENT_LENGTH
+      ? a.content.slice(0, MAX_ARTICLE_CONTENT_LENGTH) + '…'
+      : a.content,
+  }));
+
+  // 3. Split into chunks and call Groq sequentially to avoid 413 TPM errors
+  const summaries: string[] = [];
+  for (let i = 0; i < truncated.length; i += GROQ_BATCH_SIZE) {
+    const chunk = truncated.slice(i, i + GROQ_BATCH_SIZE);
+    console.log(`Processing Groq batch ${Math.floor(i / GROQ_BATCH_SIZE) + 1}: articles ${i + 1}–${i + chunk.length}`);
+    try {
+      const chunkSummaries = await callGroqBatch(chunk, env.GROQ_API_KEY);
+      summaries.push(...chunkSummaries);
+    } catch (err) {
+      console.error('Groq batch API error:', err);
+      // Fill failed chunk with empty strings so indices stay aligned
+      summaries.push(...Array(chunk.length).fill(''));
+    }
   }
 
-  // 3. Save results to D1
+  // 4. Save results to D1
   const counts: Record<string, number> = Object.fromEntries(
     FEED_SOURCES.map((s) => [s.name, 0]),
   );
