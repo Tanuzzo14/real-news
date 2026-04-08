@@ -14,5 +14,13 @@ database_id = "cb67dbe3-8b17-4763-9dab-cfd59583f268"  # Replace after `wrangler 
 # [vars]
 ALLOWED_ORIGIN = "https://real-news.pages.dev"
 
+[observability]
+[observability.logs]
+enabled = false
+invocation_logs = true
+
+[observability.traces]
+enabled = false
+
 # Secrets (set via `wrangler secret put GEMINI_API_KEY`):
 # - GEMINI_API_KEY
