@@ -58,6 +58,9 @@ jobs:
           name: frontend-dist
           path: dist
 
+      - name: Copy Pages Functions into deploy directory
+        run: cp -r functions dist/
+
       - name: Create Cloudflare Pages project (if not exists)
         uses: cloudflare/wrangler-action@v3
         continue-on-error: true
