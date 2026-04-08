@@ -185,18 +185,22 @@ L'URL sarà qualcosa tipo: `https://real-news.pages.dev`
 
 ---
 
-## STEP 9 – Configura il Frontend per puntare al Worker
+## STEP 9 – Configura la variabile d'ambiente `WORKER_URL` su Cloudflare Pages
 
-Apri `frontend/src/environments/environment.prod.ts` e assicurati che l'URL del Worker sia quello corretto:
+Il frontend usa una **Pages Function** per fare da proxy alle chiamate `/api/*` verso il Worker.
+Devi comunicare a Pages l'URL del tuo Worker tramite una variabile d'ambiente.
 
-```typescript
-export const environment = {
-  production: true,
-  apiUrl: 'https://real-news-api.TUO_ACCOUNT.workers.dev'  ← URL del tuo Worker
-};
-```
+1. Vai su [dash.cloudflare.com](https://dash.cloudflare.com) → **Workers & Pages** → `real-news`
+2. Clicca su **Settings** → **Environment variables**
+3. Aggiungi la variabile per **entrambi** gli ambienti (Production e Preview):
 
-Se devi modificarlo, ri-fai il build e il deploy del frontend (ripeti il STEP 8).
+| Nome variabile | Valore |
+|----------------|--------|
+| `WORKER_URL` | `https://real-news-api.TUO_ACCOUNT.workers.dev` |
+
+Sostituisci `TUO_ACCOUNT` con il sottodominio del tuo account Cloudflare (lo trovi nell'URL del Worker dopo il deploy al STEP 6).
+
+> 💡 Puoi verificare l'URL corretto del Worker visitando il dashboard **Workers & Pages** → `real-news-api` → panoramica.
 
 ---
 
@@ -239,7 +243,7 @@ Prima di considerarti live, verifica questi punti:
 - [ ] `wrangler.toml` ha il `database_id` corretto
 - [ ] Il secret `GEMINI_API_KEY` è stato aggiunto con `wrangler secret put`
 - [ ] La variabile `ALLOWED_ORIGIN` in `wrangler.toml` punta all'URL del tuo Pages
-- [ ] `environment.prod.ts` punta all'URL corretto del tuo Worker
+- [ ] La variabile d'ambiente `WORKER_URL` è configurata nelle impostazioni del progetto Cloudflare Pages
 - [ ] `/api/health` risponde correttamente sul Worker
 - [ ] Il frontend si apre e carica le notizie senza errori di rete
 - [ ] I secret GitHub (`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`) sono configurati
@@ -255,8 +259,9 @@ cd worker && npm run deploy
 ```
 
 ### Il frontend non riesce a caricare le notizie (errore di rete / CORS)
-- Controlla che `ALLOWED_ORIGIN` in `wrangler.toml` corrisponda esattamente all'URL del frontend (senza `/` finale)
-- Ri-deploya il Worker dopo ogni modifica al `wrangler.toml`
+- Controlla che la variabile d'ambiente `WORKER_URL` sia impostata nelle impostazioni del progetto Pages (vedi STEP 9)
+- Assicurati che il valore sia l'URL completo del Worker **senza** `/` finale (es. `https://real-news-api.abc123.workers.dev`)
+- Ri-deploya il Worker e il Frontend dopo ogni modifica di configurazione
 
 ### Il Worker non chiama Gemini (notizie vuote)
 - Verifica che il secret `GEMINI_API_KEY` sia stato impostato: `wrangler secret list`
