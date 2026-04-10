@@ -30,9 +30,22 @@ export class NewsService {
   /** Active source filter */
   readonly activeSource = signal<string | null>(null);
 
-  /** Posts grouped by date for display */
+  /** Active search query (alphanumeric only) */
+  readonly searchQuery = signal<string>('');
+
+  /** Whether search mode is active */
+  readonly isSearchActive = computed(() => this.searchQuery().trim().length > 0);
+
+  /** Posts grouped by date for display, filtered by search query when active */
   readonly groupedPosts = computed<GroupedNews[]>(() => {
-    const allPosts = this.posts();
+    const query = this.searchQuery().trim().toLowerCase();
+    const allPosts = query
+      ? this.posts().filter(
+          (p) =>
+            p.title?.toLowerCase().includes(query) ||
+            p.content_summary?.toLowerCase().includes(query),
+        )
+      : this.posts();
     const today = new Date().toISOString().split('T')[0];
     const yesterday = new Date(Date.now() - MS_PER_DAY).toISOString().split('T')[0];
 
