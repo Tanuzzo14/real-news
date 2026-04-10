@@ -1,7 +1,6 @@
 import { Component, inject, signal } from '@angular/core';
 import { ThemeService } from '../../services/theme.service';
 import { InstallService } from '../../services/install.service';
-import { NewsService } from '../../services/news.service';
 
 @Component({
   selector: 'app-header',
@@ -12,20 +11,8 @@ import { NewsService } from '../../services/news.service';
 export class HeaderComponent {
   readonly themeService = inject(ThemeService);
   readonly installService = inject(InstallService);
-  readonly newsService = inject(NewsService);
-
-  refreshNews(): void {
-    this.newsService.loadInitial();
-  }
 
   readonly showIOSSheet = signal(false);
-
-  get themeIcon(): string {
-    const theme = this.themeService.theme();
-    if (theme === 'system') return '◐';
-    if (theme === 'dark') return '☾';
-    return '☀';
-  }
 
   get themeLabel(): string {
     const theme = this.themeService.theme();

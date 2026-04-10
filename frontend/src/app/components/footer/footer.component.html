@@ -1,0 +1,179 @@
+<!-- Search overlay -->
+<div
+  class="fixed inset-0 z-40 flex flex-col pointer-events-none"
+  [class.pointer-events-auto]="searchOpen()"
+  aria-hidden="true"
+>
+  <!-- Backdrop -->
+  <div
+    class="absolute inset-0 bg-black/50 transition-opacity duration-300"
+    [class.opacity-0]="!searchOpen()"
+    [class.opacity-100]="searchOpen()"
+    (click)="closeSearch()"
+  ></div>
+
+  <!-- Search bar panel -->
+  <div
+    class="relative z-10 mx-auto w-full max-w-xl px-4 transition-all duration-300"
+    [class.-translate-y-full]="!searchOpen()"
+    [class.translate-y-0]="searchOpen()"
+    [class.opacity-0]="!searchOpen()"
+    [class.opacity-100]="searchOpen()"
+    style="padding-top: calc(env(safe-area-inset-top) + 4.5rem)"
+  >
+    <div class="flex items-center gap-3 px-4 py-3 rounded-2xl shadow-xl
+                bg-[var(--color-surface-card)] border border-[var(--color-separator)]">
+      <!-- Search icon inside bar -->
+      <svg class="w-5 h-5 shrink-0 text-[var(--color-text-muted)]" viewBox="0 0 24 24"
+           fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="11" cy="11" r="8"/>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </svg>
+
+      <input
+        #searchInput
+        type="search"
+        inputmode="search"
+        autocomplete="off"
+        autocorrect="off"
+        autocapitalize="none"
+        spellcheck="false"
+        placeholder="Cerca notizie…"
+        class="flex-1 bg-transparent text-[var(--color-text-primary)] placeholder-[var(--color-text-muted)]
+               text-base outline-none"
+        [value]="newsService.searchQuery()"
+        (input)="onSearchInput($event)"
+        (keydown)="onSearchKeydown($event)"
+        aria-label="Campo di ricerca"
+      />
+
+      <!-- Clear button -->
+      @if (newsService.searchQuery().length > 0) {
+        <button
+          (click)="newsService.searchQuery.set('')"
+          aria-label="Cancella ricerca"
+          class="flex items-center justify-center w-6 h-6 rounded-full
+                 bg-[var(--color-separator)] text-[var(--color-text-muted)]
+                 active:scale-90 transition-transform duration-150"
+        >
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2.5"
+               stroke-linecap="round" aria-hidden="true">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      }
+
+      <button
+        (click)="closeSearch()"
+        class="shrink-0 text-sm font-semibold text-[var(--color-accent)]
+               active:opacity-60 transition-opacity"
+      >
+        Chiudi
+      </button>
+    </div>
+
+    <!-- No results message -->
+    @if (newsService.isSearchActive() && newsService.groupedPosts().length === 0) {
+      <div class="mt-4 px-4 py-3 rounded-xl bg-[var(--color-surface-card)]
+                  border border-[var(--color-separator)] text-center">
+        <p class="text-sm text-[var(--color-text-muted)]">Nessun articolo trovato</p>
+      </div>
+    }
+  </div>
+</div>
+
+<!-- Bottom Tab Bar -->
+<nav
+  class="fixed bottom-0 left-0 right-0 z-30
+         backdrop-blur-lg bg-[var(--color-surface)]/90
+         border-t border-[var(--color-separator)]
+         transition-colors duration-300"
+  style="padding-bottom: env(safe-area-inset-bottom)"
+  aria-label="Navigazione principale"
+>
+  <div class="mx-auto max-w-xl flex items-center justify-around h-16 px-4">
+
+    <!-- Support (Heart) -->
+    <button
+      (click)="openSupport()"
+      aria-label="Supporta il progetto"
+      class="group flex flex-col items-center gap-1 px-4 py-2
+             text-[var(--color-text-muted)] hover:text-red-500
+             active:scale-90 transition-all duration-150"
+    >
+      <svg class="w-6 h-6 transition-colors duration-150 group-hover:fill-red-500"
+           viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+           aria-hidden="true">
+        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+      </svg>
+      <span class="text-[10px] font-medium">Supporta</span>
+    </button>
+
+    <!-- Refresh -->
+    <button
+      (click)="triggerRefresh()"
+      [disabled]="newsService.loading()"
+      aria-label="Aggiorna notizie"
+      class="flex flex-col items-center gap-1 px-4 py-2
+             text-[var(--color-text-muted)] hover:text-[var(--color-accent)]
+             active:scale-90 transition-all duration-150 disabled:opacity-40"
+    >
+      <svg
+        class="w-6 h-6 transition-all duration-300"
+        [class.animate-spin]="refreshSpinning() || newsService.loading()"
+        viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M23 4v6h-6"/>
+        <path d="M1 20v-6h6"/>
+        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+      </svg>
+      <span class="text-[10px] font-medium">Aggiorna</span>
+    </button>
+
+    <!-- Search -->
+    <button
+      (click)="toggleSearch()"
+      [attr.aria-expanded]="searchOpen()"
+      aria-label="Cerca notizie"
+      class="flex flex-col items-center gap-1 px-4 py-2
+             active:scale-90 transition-all duration-150"
+      [class.text-[var(--color-accent)]]="searchOpen()"
+      [class.text-[var(--color-text-muted)]]="!searchOpen()"
+    >
+      <!-- Animated: show X when open, magnifier when closed -->
+      <div class="relative w-6 h-6">
+        <!-- Magnifier -->
+        <svg
+          class="absolute inset-0 w-6 h-6 transition-all duration-300"
+          [class.opacity-0]="searchOpen()"
+          [class.scale-50]="searchOpen()"
+          viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <circle cx="11" cy="11" r="8"/>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+        <!-- Close X -->
+        <svg
+          class="absolute inset-0 w-6 h-6 transition-all duration-300"
+          [class.opacity-0]="!searchOpen()"
+          [class.scale-50]="!searchOpen()"
+          viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="2" stroke-linecap="round" aria-hidden="true"
+        >
+          <line x1="18" y1="6" x2="6" y2="18"/>
+          <line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </div>
+      <span class="text-[10px] font-medium">Cerca</span>
+    </button>
+
+  </div>
+</nav>

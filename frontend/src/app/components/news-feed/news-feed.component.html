@@ -1,4 +1,4 @@
-<div #feedContainer class="mx-auto max-w-xl px-4 pb-20 pt-2">
+<div #feedContainer class="mx-auto max-w-xl px-4 pb-28 pt-2">
   <!-- Pull-to-refresh indicator -->
   @if (pullDistance() > 0 || refreshing()) {
     <div
@@ -83,8 +83,8 @@
       </div>
     }
 
-    <!-- Empty state -->
-    @if (!newsService.loading() && newsService.posts().length === 0) {
+    <!-- Empty state: no posts at all -->
+    @if (!newsService.loading() && newsService.posts().length === 0 && !newsService.isSearchActive()) {
       <div class="text-center py-16">
         <p class="text-4xl mb-3">📭</p>
         <p class="text-base font-semibold text-[var(--color-text-primary)] mb-1">
@@ -92,6 +92,19 @@
         </p>
         <p class="text-sm text-[var(--color-text-muted)]">
           Prova ad aggiornare o torna più tardi.
+        </p>
+      </div>
+    }
+
+    <!-- Empty state: search returned no results -->
+    @if (newsService.isSearchActive() && newsService.groupedPosts().length === 0) {
+      <div class="text-center py-16">
+        <p class="text-4xl mb-3">🔍</p>
+        <p class="text-base font-semibold text-[var(--color-text-primary)] mb-1">
+          Nessun articolo trovato
+        </p>
+        <p class="text-sm text-[var(--color-text-muted)]">
+          Prova con un termine di ricerca diverso.
         </p>
       </div>
     }
