@@ -18,6 +18,9 @@ export class FooterComponent implements OnDestroy {
   /** Spinning state for the refresh icon */
   readonly refreshSpinning = signal(false);
 
+  /** Extra buffer after the 300ms CSS transition to ensure the input is fully visible */
+  private readonly SEARCH_FOCUS_DELAY_MS = 350;
+
   private spinTimeout?: ReturnType<typeof setTimeout>;
 
   @ViewChild('searchInput') searchInput?: ElementRef<HTMLInputElement>;
@@ -47,7 +50,7 @@ export class FooterComponent implements OnDestroy {
       this.newsService.searchQuery.set('');
     } else {
       // Focus the input after the overlay transition
-      setTimeout(() => this.searchInput?.nativeElement.focus(), 350);
+      setTimeout(() => this.searchInput?.nativeElement.focus(), this.SEARCH_FOCUS_DELAY_MS);
     }
   }
 
@@ -60,6 +63,7 @@ export class FooterComponent implements OnDestroy {
   /** Allow only alphanumeric characters and spaces */
   onSearchInput(event: Event): void {
     const input = event.target as HTMLInputElement;
+    // Allow alphanumeric + Italian accented characters (à, è, ì, ò, ù, etc. – \u00C0-\u024F) + spaces
     const sanitized = input.value.replace(/[^a-zA-Z0-9\u00C0-\u024F\s]/g, '');
     if (sanitized !== input.value) {
       input.value = sanitized;
