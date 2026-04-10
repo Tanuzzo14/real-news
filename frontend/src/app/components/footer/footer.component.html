@@ -1,7 +1,7 @@
 <!-- Search overlay -->
 <div
-  class="fixed inset-0 z-40 flex flex-col pointer-events-none"
-  [class.pointer-events-auto]="searchOpen()"
+  class="fixed inset-0 z-40 flex flex-col"
+  [class.pointer-events-none]="!searchOpen()"
   aria-hidden="true"
 >
   <!-- Backdrop -->
